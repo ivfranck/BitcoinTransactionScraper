@@ -32,13 +32,9 @@ as follows:
 ---
 
 ### Storing the data:
-The data gets stored in a log file. This was done by firstly importing its module. The next step was to create and configure
-the logger.Then the threshold of the logger was set to logging.INFO. From there the data was written to the log file.
-```
-logging.basicConfig(filename="transc.log",
-                            format='%(message)s',
-                            filemode='w')
-        logger = logging.getLogger()
+The data is being stored in 3 different ways. In a log file, json file, and in mongo database to keep it more organised
+and make it easier to retrieve data.
 
-        logger.setLevel(logging.INFO)
-```
+A preview of how it is displayed in mongo database:
+
+![Preview Storage](preview.png)

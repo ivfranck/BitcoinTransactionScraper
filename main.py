@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import time
 import json
 import pymongo as mongo
+import redis
+
 
 class Scraper:
     def __init__(self):
@@ -18,9 +20,12 @@ class Scraper:
     def connection(self):
         return requests.get(self.link)
 
+    def redis_conn(self):
+        return redis.Redis()
+
     def get_data(self):
 
-        time_change = timedelta(hours=2)
+        time_change = timedelta(hours=1)
         soup = BeautifulSoup(self.connection().text, "html.parser")
         amounts = []
         # get all bitcoin values in a separate list and sort
@@ -68,28 +73,41 @@ class Scraper:
 
         self.final_data = corr_data[:10]
 
+        if len(self.final_data) != 10:
+            self.final_data = []
+            self.get_data()
+
         if len(corr_data) == 0:
             # for an unknown reason corr_data is sometimes empty
             self.get_data()
 
-    def to_mongodb(self):
+    def redis_cache(self):
         hash_info = {}
-        dic_mongo = {}
-        self.get_data()
+        exp_dic = {}
         headers = ["Hash", "Time", "BTC Amount", "Dollar Amount"]
 
         for transactions in self.final_data:
-            hash_info[transactions[0]] = {headers[1]: transactions[1], headers[2]: transactions[2], headers[3]: transactions[3]}
-        self.dic[self.current_time] = hash_info
-        dic_mongo[self.current_time] = hash_info
+            hash_info[transactions[0]] = {headers[1]: transactions[1], headers[2]: transactions[2],
+                                          headers[3]: transactions[3]}
 
-        json_obj = json.dumps(self.dic, default=str)
+        self.dic[self.current_time] = hash_info
+        exp_dic[self.current_time] = hash_info
+
+        r = self.redis_conn()
+        json_str = json.dumps(exp_dic)
+        r.set(self.current_time, json_str, ex=60)
+
+    def to_mongodb(self):
+        data = self.redis_conn().get(self.current_time)
+        result = json.loads(data)
 
         client = mongo.MongoClient("mongodb://127.0.0.1:27017")
         transactions_db = client["transactions"]
         col_transactions = transactions_db["hashes"]
-        add = col_transactions.insert_one(dic_mongo)
+        col_transactions.insert_one(result)
 
+    def to_json(self):
+        json_obj = json.dumps(self.dic, default=str)
         with open("transc.json", "w") as outfile:
             outfile.write(json_obj)
 
@@ -115,7 +133,9 @@ class Scraper:
             if self.current_time != self.old_current_time:
                 self.get_data()
                 self.store_data()
+                self.redis_cache()
                 self.to_mongodb()
+                self.to_json()
                 self.data = []
                 self.final_data = []
                 self.old_current_time = self.current_time

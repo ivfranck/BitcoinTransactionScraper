@@ -21,7 +21,7 @@ class Scraper:
         return requests.get(self.link)
 
     def redis_conn(self):
-        return redis.Redis()
+        return redis.Redis(host="redis", port=6379, decode_responses=True)
 
     def get_data(self):
 
@@ -101,7 +101,7 @@ class Scraper:
         data = self.redis_conn().get(self.current_time)
         result = json.loads(data)
 
-        client = mongo.MongoClient("mongodb://127.0.0.1:27017")
+        client = mongo.MongoClient("mongodb://mongo:27017")
         transactions_db = client["transactions"]
         col_transactions = transactions_db["hashes"]
         col_transactions.insert_one(result)
